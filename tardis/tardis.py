@@ -21,7 +21,6 @@ class TARDIS:
         SQLModel.metadata.create_all(self.engine)
 
         register_primitives(self)
-        print(self.registered_datatypes)
     
     def register_datatype(self, identifier: str, model):
         self.registered_datatypes[identifier] = model

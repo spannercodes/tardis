@@ -29,7 +29,7 @@ if __name__ == "__main__":
                 setter="tardis:list:insert",
                 subject_type="example:person",
                 subject_identifier="hannah",
-                body="chungus",
+                body="inserted at index 3!",
                 updated_at=datetime.now()+timedelta(hours=randint(-256,0)),
                 params={"index":"3"}
             ))

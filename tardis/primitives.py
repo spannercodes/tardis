@@ -5,6 +5,32 @@ from fastapi import Depends
 from typing import Annotated
 from datetime import datetime
 
+def get_starting_value_update(db: Annotated[Session, Depends(tardis.db)],
+        field: str, subject_type: str, subject_identifier: str,
+        at: datetime = None) -> FieldUpdate | None:
+    return  db.exec(select(FieldUpdate).where(
+                FieldUpdate.setter == "value",
+                FieldUpdate.subject_type == subject_type,
+                FieldUpdate.subject_identifier == subject_identifier,
+                (FieldUpdate.updated_at <= at if at is not None else True),
+            ).order_by(FieldUpdate.updated_at.desc()).limit(1)).first()
+
+def get_updates(db: Annotated[Session, Depends(tardis.db)],
+        field: str, subject_type: str, subject_identifier: str,
+        starting_value_update: FieldUpdate | None,
+        setters: list[str],
+        at: datetime = None) -> list[FieldUpdate]:
+
+    setter_matcher = or_(*[FieldUpdate.setter == setter for setter in setters])
+    return  db.exec(select(FieldUpdate.setter, FieldUpdate.body, FieldUpdate.params).where(
+                FieldUpdate.field == field,
+                setter_matcher,
+                FieldUpdate.subject_type == subject_type,
+                FieldUpdate.subject_identifier == subject_identifier,
+                (FieldUpdate.updated_at >= starting_value_update.updated_at if starting_value_update is not None else True),
+                (FieldUpdate.updated_at <= at if at is not None else True),
+            ).order_by(FieldUpdate.updated_at.desc())).all()
+
 def register_primitives(tardis):
     tardis.register_datatype("tardis:float", float)
     tardis.register_datatype("tardis:integer", int)
@@ -23,12 +49,7 @@ def register_primitives(tardis):
         field: str, subject_type: str, subject_identifier: str,
         at: datetime = None) -> str:
 
-        starting_value_update = db.exec(select(FieldUpdate).where(
-            FieldUpdate.setter == "value",
-            FieldUpdate.subject_type == subject_type,
-            FieldUpdate.subject_identifier == subject_identifier,
-            (FieldUpdate.updated_at <= at if at is not None else True),
-        ).order_by(FieldUpdate.updated_at.desc()).limit(1)).first()
+        starting_value_update = get_starting_value_update(db, field, subject_type, subject_identifier, at)
 
         starting_value = starting_value_update.body if starting_value_update is not None else 0
 
@@ -49,25 +70,15 @@ def register_primitives(tardis):
         field: str, subject_type: str, subject_identifier: str,
         at: datetime = None) -> str:
 
-        starting_value_update = db.exec(select(FieldUpdate).where(
-            FieldUpdate.setter == "value",
-            FieldUpdate.subject_type == subject_type,
-            FieldUpdate.subject_identifier == subject_identifier,
-            (FieldUpdate.updated_at <= at if at is not None else True),
-        ).order_by(FieldUpdate.updated_at.desc()).limit(1)).first()
+        starting_value_update = get_starting_value_update(db, field, subject_type, subject_identifier, at)
 
         value = set(starting_value_update.body) if starting_value_update is not None else set()
 
-        updates = db.exec(select(FieldUpdate.setter, FieldUpdate.body).where(
-            FieldUpdate.field == field,
-            or_(FieldUpdate.setter == "tardis:set:put", FieldUpdate.setter == "tardis:set:remove"),
-            FieldUpdate.subject_type == subject_type,
-            FieldUpdate.subject_identifier == subject_identifier,
-            (FieldUpdate.updated_at >= starting_value_update.updated_at if starting_value_update is not None else True),
-            (FieldUpdate.updated_at <= at if at is not None else True),
-        ).order_by(FieldUpdate.updated_at.desc())).all()
+        setters = ["tardis:set:put", "tardis:set:remove"]
 
-        for setter,item in updates:
+        updates = get_updates(db, field, subject_type, subject_identifier, starting_value_update, setters, at)
+
+        for setter,item,params in updates:
             if setter == "tardis:set:put":
                 value.add(item)
             if setter == "tardis:set:remove":
@@ -81,28 +92,15 @@ def register_primitives(tardis):
         field: str, subject_type: str, subject_identifier: str,
         at: datetime = None) -> str:
 
-        starting_value_update = db.exec(select(FieldUpdate).where(
-            FieldUpdate.setter == "value",
-            FieldUpdate.subject_type == subject_type,
-            FieldUpdate.subject_identifier == subject_identifier,
-            (FieldUpdate.updated_at <= at if at is not None else True),
-        ).order_by(FieldUpdate.updated_at.desc()).limit(1)).first()
-
-        print(starting_value_update)
+        starting_value_update = get_starting_value_update(db, field, subject_type, subject_identifier, at)
 
         value: list = list(starting_value_update.body) if starting_value_update is not None else []
 
-        updates = db.exec(select(FieldUpdate.setter, FieldUpdate.body, FieldUpdate.params).where(
-            FieldUpdate.field == field,
-            or_(FieldUpdate.setter == "tardis:list:append", FieldUpdate.setter == "tardis:list:remove", FieldUpdate.setter == "tardis:list:insert"),
-            FieldUpdate.subject_type == subject_type,
-            FieldUpdate.subject_identifier == subject_identifier,
-            (FieldUpdate.updated_at >= starting_value_update.updated_at if starting_value_update is not None else True),
-            (FieldUpdate.updated_at <= at if at is not None else True),
-        ).order_by(FieldUpdate.updated_at.desc())).all()
+        setters = ["tardis:list:append", "tardis:list:remove", "tardis:list:insert"]
+
+        updates = get_updates(db, field, subject_type, subject_identifier, starting_value_update, setters, at)
 
         for setter,item,params in updates:
-            print(setter, item, params)
             if setter == "tardis:list:append":
                 value.append(item)
             if setter == "tardis:list:remove":
