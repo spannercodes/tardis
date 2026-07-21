@@ -26,19 +26,24 @@ class TARDIS:
         self.registered_datatypes[identifier] = model
     
     def register_value_getter(self, datatype: str, getter_identifier: str):
-        self.registered_value_getters[datatype] = getter_identifier
+        getter_method = self.registered_getters.get(getter_identifier)
+        if getter_method is None:
+            raise ValueError(f"Getter {getter_identifier} is not registered")
+        self.registered_value_getters[datatype] = (getter_identifier, getter_method)
     
     def register_field(self, identifier: str, datatype: str):
         self.registered_fields[identifier] = datatype
     
     def register_getter(self, datatypes: list[str], identifier: str, getter, **kwargs):
-        response_types = []
-        for datatype in datatypes:
-            dt = self.registered_datatypes.get(datatype)
-            if dt is None:
-                raise ValueError(f"datatype not registered: {datatype}")
-            response_types.append(dt)
-        self.router.get(f"/{{field}}/{identifier}/{{subject_type}}/{{subject_identifier}}", response_model=Union[*response_types], dependencies=[Depends(self._validate_field)])(getter)
+        # response_types = []
+        # for datatype in datatypes:
+        #     dt = self.registered_datatypes.get(datatype)
+        #     if dt is None:
+        #         raise ValueError(f"datatype not registered: {datatype}")
+        #     response_types.append(dt)
+        # response_model=Union[*response_types]
+        self.router.get(f"/{{field}}/{identifier}/{{subject_type}}/{{subject_identifier}}", dependencies=[Depends(self._validate_field)], **kwargs)(getter)
+        self.registered_getters[identifier] = getter
     def getter(self, datatypes: list[str], identifier: str, **kwargs):
         def wrapper(getter):
             self.register_getter(datatypes, identifier, getter, **kwargs)
@@ -52,10 +57,11 @@ class TARDIS:
                 datatype = self.registered_fields.get(field)
                 if datatype is None:
                     raise HTTPException(status_code=404, detail=f"Field {field} is not registered in this store")
-                getter = self.registered_value_getters.get(datatype)
+                getter,_ = self.registered_value_getters.get(datatype)
                 if getter is None:
                     raise HTTPException(status_code=404, detail=f"A value getter has not been defined for the datatype {datatype}")
                 request.scope["path"] = f"/{field}/{getter}/{subject_type}/{subject_identifier}"
+                await self._validate_field(field)
         return await call_next(request)
     
     async def _validate_field(self, field: str):

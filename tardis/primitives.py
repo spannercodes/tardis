@@ -1,9 +1,12 @@
+from __future__ import nested_scopes
 from .model import *
 
 from sqlmodel import SQLModel, Session, select, func, or_
 from fastapi import Depends
-from typing import Annotated
+from typing import Annotated, Any
 from datetime import datetime
+
+import numpy as np
 
 def get_starting_value_update(db: Annotated[Session, Depends(tardis.db)],
         field: str, subject_type: str, subject_identifier: str,
@@ -38,19 +41,12 @@ def register_primitives(tardis):
     tardis.register_datatype("tardis:list", list)
     tardis.register_datatype("tardis:string", str)
 
-    # TODO: this could be merged with the above
-    tardis.register_value_getter("tardis:numeric:float", "tardis:numeric:value")
-    tardis.register_value_getter("tardis:numeric:integer", "tardis:numeric:value")
-    tardis.register_value_getter("tardis:set", "tardis:set:value")
-    tardis.register_value_getter("tardis:list", "tardis:list:value")
-    tardis.register_value_getter("tardis:string", "tardis:simple:value")
-
     @tardis.getter(["tardis:string"], "tardis:simple:value")
     async def simple_value(
         db: Annotated[Session, Depends(tardis.db)],
         field: str, subject_type: str, subject_identifier: str,
         at: datetime = None,
-        default=None):
+        default=None) -> Any:
         starting_value_update = get_starting_value_update(db, field, subject_type, subject_identifier, at)
         starting_value = starting_value_update.body if starting_value_update is not None else default
         return starting_value
@@ -59,7 +55,7 @@ def register_primitives(tardis):
     async def numeric_value(
         db: Annotated[Session, Depends(tardis.db)],
         field: str, subject_type: str, subject_identifier: str,
-        at: datetime = None) -> str:
+        at: datetime = None) -> int | float:
 
         starting_value_update = get_starting_value_update(db, field, subject_type, subject_identifier, at)
 
@@ -80,7 +76,7 @@ def register_primitives(tardis):
     async def set_value(
         db: Annotated[Session, Depends(tardis.db)],
         field: str, subject_type: str, subject_identifier: str,
-        at: datetime = None) -> str:
+        at: datetime = None) -> set:
 
         starting_value_update = get_starting_value_update(db, field, subject_type, subject_identifier, at)
 
@@ -102,7 +98,7 @@ def register_primitives(tardis):
     async def list_value(
         db: Annotated[Session, Depends(tardis.db)],
         field: str, subject_type: str, subject_identifier: str,
-        at: datetime = None) -> str:
+        at: datetime = None) -> list:
 
         starting_value_update = get_starting_value_update(db, field, subject_type, subject_identifier, at)
 
@@ -131,3 +127,26 @@ def register_primitives(tardis):
                         # print(f"Failed to insert to an array at index {index}. Probably a reverted event without a value being set. Horrors!")
 
         return value
+
+    @tardis.getter(["tardis:list", "tardis:set"], "tardis:collection:average", response_model=float)
+    async def collection_avg(
+        db: Annotated[Session, Depends(tardis.db)],
+        field: str, subject_type: str, subject_identifier: str,
+        at: datetime = None) -> float:
+
+        datatype = tardis.registered_fields.get(field)
+        value_getter = tardis.registered_value_getters.get(datatype)
+        if value_getter is None:
+            raise ValueError(f"Value getter is not set for datatype {datatype}")
+        
+        _,getter = value_getter
+
+        value = await getter(db, field, subject_type, subject_identifier, at)
+
+        return float(np.average(value))
+    
+    tardis.register_value_getter("tardis:numeric:float", "tardis:numeric:value")
+    tardis.register_value_getter("tardis:numeric:integer", "tardis:numeric:value")
+    tardis.register_value_getter("tardis:set", "tardis:set:value")
+    tardis.register_value_getter("tardis:list", "tardis:list:value")
+    tardis.register_value_getter("tardis:string", "tardis:simple:value")
