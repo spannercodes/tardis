@@ -36,12 +36,24 @@ def register_primitives(tardis):
     tardis.register_datatype("tardis:integer", int)
     tardis.register_datatype("tardis:set", set)
     tardis.register_datatype("tardis:list", list)
+    tardis.register_datatype("tardis:string", str)
 
     # TODO: this could be merged with the above
     tardis.register_value_getter("tardis:numeric:float", "tardis:numeric:value")
     tardis.register_value_getter("tardis:numeric:integer", "tardis:numeric:value")
     tardis.register_value_getter("tardis:set", "tardis:set:value")
     tardis.register_value_getter("tardis:list", "tardis:list:value")
+    tardis.register_value_getter("tardis:string", "tardis:simple:value")
+
+    @tardis.getter(["tardis:string"], "tardis:simple:value")
+    async def simple_value(
+        db: Annotated[Session, Depends(tardis.db)],
+        field: str, subject_type: str, subject_identifier: str,
+        at: datetime = None,
+        default=None):
+        starting_value_update = get_starting_value_update(db, field, subject_type, subject_identifier, at)
+        starting_value = starting_value_update.body if starting_value_update is not None else default
+        return starting_value
 
     @tardis.getter(["tardis:integer", "tardis:float"], "tardis:numeric:value")
     async def numeric_value(
