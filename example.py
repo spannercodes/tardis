@@ -5,6 +5,7 @@ tardis = TARDIS("sqlite:///tardis_example.sqlite")
 tardis.register_field("example:integer", "tardis:numeric:integer")
 tardis.register_field("example:float",   "tardis:numeric:float")
 tardis.register_field("example:set",     "tardis:set")
+tardis.register_field("example:list",    "tardis:list")
 
 if __name__ == "__main__":
     tardis.serve()

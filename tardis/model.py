@@ -12,6 +12,7 @@ class FieldUpdate(SQLModel, table=True):
     subject_identifier: str
     body: Any = Field(sa_column=Column(JSON, nullable=False))
     updated_at: datetime
+    params: dict[str, str] = Field(sa_column=Column(JSON, nullable=False))
 
     # needed for Column(JSON)
     class Config:
