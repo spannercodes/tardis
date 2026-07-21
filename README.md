@@ -19,7 +19,7 @@ But disaster strikes! A bug has caused an issue with one specific kill (and deat
 
 And if your old-fashioned coworker can't fathom using anything other than spreadsheet software, well, of course you can use it like that!
 
-![A spreadsheet with data sourced from TARDIS](docs/libreoffice_calc.png)
+![A spreadsheet with data sourced from TARDIS](docs/biomebattle.png)
 
 ## Contributing
 
