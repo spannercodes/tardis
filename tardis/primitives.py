@@ -197,6 +197,14 @@ def register_primitives(tardis):
         request: Request, event: str = None):
 
         return await generic_setter("tardis:list:append", db, field, subject_type, subject_identifier, request, event)
+
+    @tardis.setter(["tardis:integer", "tardis:float"], "tardis:numeric:delta")
+    async def numeric_delta(
+        db: Annotated[Session, Depends(tardis.db)],
+        field: str, subject_type: str, subject_identifier: str,
+        request: Request, event: str = None):
+
+        return await generic_setter("tardis:numeric:delta", db, field, subject_type, subject_identifier, request, event)
     
     tardis.register_value_modifiers("tardis:numeric:float", "tardis:numeric:value", "tardis:simple:value")
     tardis.register_value_modifiers("tardis:numeric:integer", "tardis:numeric:value", "tardis:simple:value")
