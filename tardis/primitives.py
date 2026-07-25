@@ -13,6 +13,7 @@ def get_starting_value_update(db: Annotated[Session, Depends(tardis.db)],
         field: str, subject_type: str, subject_identifier: str,
         at: datetime = None) -> FieldUpdate | None:
     return  db.exec(select(FieldUpdate).where(
+                FieldUpdate.field == field,
                 FieldUpdate.setter == "value",
                 FieldUpdate.subject_type == subject_type,
                 FieldUpdate.subject_identifier == subject_identifier,
