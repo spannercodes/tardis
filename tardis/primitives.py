@@ -135,7 +135,6 @@ def register_primitives(tardis):
 
         starting_value_update = get_starting_value_update(db, field, subject_type, subject_identifier, at)
 
-        print("!!!!!!!!!!!!!", starting_value_update)
         value: list = list(starting_value_update.body) if starting_value_update is not None else []
 
         setters = ["tardis:list:append", "tardis:list:remove", "tardis:list:insert"]
@@ -143,8 +142,6 @@ def register_primitives(tardis):
         updates = get_updates(db, field, subject_type, subject_identifier, starting_value_update, setters, at)
 
         for setter,item,params in updates:
-            print(setter,item,params)
-
             if setter == "tardis:list:append":
                 value.append(item)
             if setter == "tardis:list:remove":
