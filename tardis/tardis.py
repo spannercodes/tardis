@@ -55,7 +55,7 @@ class TARDIS:
         return wrapper
     
     def register_setter(self, datatypes: list[str], identifier: str, setter, **kwargs):
-        self.router.put(f"/{{field}}/{identifier}/{{subject_type}}/{{subject_identifier}}", dependencies=[Depends(self._validate_field)], **kwargs)(setter)
+        self.router.post(f"/{{field}}/{identifier}/{{subject_type}}/{{subject_identifier}}", dependencies=[Depends(self._validate_field)], **kwargs)(setter)
         self.registered_setters[identifier] = setter
     def setter(self, datatypes: list[str], identifier: str, **kwargs):
         def wrapper(setter):
@@ -74,7 +74,7 @@ class TARDIS:
                 modifier = None
                 if request.scope["method"] == "GET":
                     modifier,_ = self.registered_value_getters.get(datatype)
-                elif request.scope["method"] == "PUT":
+                elif request.scope["method"] == "POST":
                     modifier,_ = self.registered_value_setters.get(datatype)
                 else:
                     raise HTTPException(status_code=405)
