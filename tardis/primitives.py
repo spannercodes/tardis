@@ -2,11 +2,12 @@ from __future__ import nested_scopes
 from .model import *
 
 from sqlmodel import SQLModel, Session, select, func, or_
-from fastapi import Depends
+from fastapi import Depends, Request
 from typing import Annotated, Any
-from datetime import datetime
-
+from datetime import datetime, timezone
+from uuid import UUID, uuid4
 import numpy as np
+from urllib.parse import parse_qs
 
 def get_starting_value_update(db: Annotated[Session, Depends(tardis.db)],
         field: str, subject_type: str, subject_identifier: str,
@@ -32,7 +33,39 @@ def get_updates(db: Annotated[Session, Depends(tardis.db)],
                 FieldUpdate.subject_identifier == subject_identifier,
                 (FieldUpdate.updated_at >= starting_value_update.updated_at if starting_value_update is not None else True),
                 (FieldUpdate.updated_at <= at if at is not None else True),
-            ).order_by(FieldUpdate.updated_at.desc())).all()
+            ).order_by(FieldUpdate.updated_at.asc())).all()
+
+async def generic_setter(
+        setter: str,
+        db: Annotated[Session, Depends(tardis.db)],
+        field: str, subject_type: str, subject_identifier: str,
+        request: Request, event: str = None):
+
+    body = await request.json()
+
+    if event is None:
+        event = uuid4()
+    else:
+        event = UUID(event)
+
+    params = dict(request.query_params)
+    if "event" in params:
+        del params["event"]
+
+    update = FieldUpdate(
+        id=uuid4(),
+        event=event,
+        field=field,
+        setter=setter,
+        subject_type=subject_type,
+        subject_identifier=subject_identifier,
+        body=body,
+        updated_at=datetime.now(timezone.utc), # TODO: this should maybe be taken from what the client says, else you might have one event with several update times
+        params=params,
+    )
+
+    db.add(update)
+    db.commit()
 
 def register_primitives(tardis):
     tardis.register_datatype("tardis:float", float)
@@ -102,6 +135,7 @@ def register_primitives(tardis):
 
         starting_value_update = get_starting_value_update(db, field, subject_type, subject_identifier, at)
 
+        print("!!!!!!!!!!!!!", starting_value_update)
         value: list = list(starting_value_update.body) if starting_value_update is not None else []
 
         setters = ["tardis:list:append", "tardis:list:remove", "tardis:list:insert"]
@@ -109,6 +143,8 @@ def register_primitives(tardis):
         updates = get_updates(db, field, subject_type, subject_identifier, starting_value_update, setters, at)
 
         for setter,item,params in updates:
+            print(setter,item,params)
+
             if setter == "tardis:list:append":
                 value.append(item)
             if setter == "tardis:list:remove":
@@ -145,8 +181,27 @@ def register_primitives(tardis):
 
         return float(np.average(value))
     
-    tardis.register_value_getter("tardis:numeric:float", "tardis:numeric:value")
-    tardis.register_value_getter("tardis:numeric:integer", "tardis:numeric:value")
-    tardis.register_value_getter("tardis:set", "tardis:set:value")
-    tardis.register_value_getter("tardis:list", "tardis:list:value")
-    tardis.register_value_getter("tardis:string", "tardis:simple:value")
+    @tardis.setter(
+        ["tardis:numeric:float", "tardis:numeric:integer", "tardis:set", "tardis:list", "tardis:string"],
+        "tardis:simple:value"
+        )
+    async def simple_value(
+        db: Annotated[Session, Depends(tardis.db)],
+        field: str, subject_type: str, subject_identifier: str,
+        request: Request, event: str = None):
+
+        return await generic_setter("value", db, field, subject_type, subject_identifier, request, event)
+
+    @tardis.setter(["tardis:list"], "tardis:list:append")
+    async def list_append(
+        db: Annotated[Session, Depends(tardis.db)],
+        field: str, subject_type: str, subject_identifier: str,
+        request: Request, event: str = None):
+
+        return await generic_setter("tardis:list:append", db, field, subject_type, subject_identifier, request, event)
+    
+    tardis.register_value_modifiers("tardis:numeric:float", "tardis:numeric:value", "tardis:simple:value")
+    tardis.register_value_modifiers("tardis:numeric:integer", "tardis:numeric:value", "tardis:simple:value")
+    tardis.register_value_modifiers("tardis:set", "tardis:set:value", "tardis:simple:value")
+    tardis.register_value_modifiers("tardis:list", "tardis:list:value", "tardis:simple:value")
+    tardis.register_value_modifiers("tardis:string", "tardis:simple:value", "tardis:simple:value")

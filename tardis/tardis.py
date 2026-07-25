@@ -10,13 +10,14 @@ class TARDIS:
         self.router = APIRouter()
         self.registered_datatypes = {}
         self.registered_value_getters = {}
+        self.registered_value_setters = {}
         self.registered_fields = {}
         self.registered_getters = {}
         self.registered_setters = {}
 
         self.fastapi = FastAPI()
         self.fastapi.include_router(self.router)
-        self.fastapi.middleware("http")(self._field_value_getter)
+        self.fastapi.middleware("http")(self._field_value_modifier)
         self.engine = create_engine(database_uri, echo=True)
         SQLModel.metadata.create_all(self.engine)
 
@@ -25,11 +26,15 @@ class TARDIS:
     def register_datatype(self, identifier: str, model):
         self.registered_datatypes[identifier] = model
     
-    def register_value_getter(self, datatype: str, getter_identifier: str):
+    def register_value_modifiers(self, datatype: str, getter_identifier: str, setter_identifier: str):
         getter_method = self.registered_getters.get(getter_identifier)
+        setter_method = self.registered_setters.get(setter_identifier)
         if getter_method is None:
             raise ValueError(f"Getter {getter_identifier} is not registered")
+        if setter_method is None:
+            raise ValueError(f"Setter {setter_identifier} is not registered")
         self.registered_value_getters[datatype] = (getter_identifier, getter_method)
+        self.registered_value_setters[datatype] = (setter_identifier, setter_method)
     
     def register_field(self, identifier: str, datatype: str):
         self.registered_fields[identifier] = datatype
@@ -49,7 +54,15 @@ class TARDIS:
             self.register_getter(datatypes, identifier, getter, **kwargs)
         return wrapper
     
-    async def _field_value_getter(self, request: Request, call_next):
+    def register_setter(self, datatypes: list[str], identifier: str, setter, **kwargs):
+        self.router.put(f"/{{field}}/{identifier}/{{subject_type}}/{{subject_identifier}}", dependencies=[Depends(self._validate_field)], **kwargs)(setter)
+        self.registered_setters[identifier] = setter
+    def setter(self, datatypes: list[str], identifier: str, **kwargs):
+        def wrapper(setter):
+            self.register_setter(datatypes, identifier, setter, **kwargs)
+        return wrapper
+
+    async def _field_value_modifier(self, request: Request, call_next):
         s = request.scope["path"].split('/')[1:]
         if len(s) == 4 and s[1] == "value":
             field,_,subject_type,subject_identifier = s
@@ -57,10 +70,18 @@ class TARDIS:
                 datatype = self.registered_fields.get(field)
                 if datatype is None:
                     raise HTTPException(status_code=404, detail=f"Field {field} is not registered in this store")
-                getter,_ = self.registered_value_getters.get(datatype)
-                if getter is None:
-                    raise HTTPException(status_code=404, detail=f"A value getter has not been defined for the datatype {datatype}")
-                request.scope["path"] = f"/{field}/{getter}/{subject_type}/{subject_identifier}"
+
+                modifier = None
+                if request.scope["method"] == "GET":
+                    modifier,_ = self.registered_value_getters.get(datatype)
+                elif request.scope["method"] == "PUT":
+                    modifier,_ = self.registered_value_setters.get(datatype)
+                else:
+                    raise HTTPException(status_code=405)
+
+                if modifier is None:
+                    raise HTTPException(status_code=404, detail=f"A value modifier has not been defined for the datatype {datatype}")
+                request.scope["path"] = f"/{field}/{modifier}/{subject_type}/{subject_identifier}"
                 await self._validate_field(field)
         return await call_next(request)
     
