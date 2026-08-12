@@ -9,7 +9,7 @@ TARDIS is a data store for statistics, especially in competetive games & sport. 
 
 The system works on this design: fields (e.g. `football:goals`) have datatypes (e.g. `tardis:numeric:integer`) which have getters (e.g. `tardis:numeric:value`) and setters (e.g. `tardis:numeric:increment`) to modify/read the field's value for a given subject (e.g. `football:player/wayne-rooney`)
 
-Lastly, everything is done in transaction-like updates known as events. These are different to transactions in the traditional sense, because they are reversible even after they have been committed.
+Lastly, everything is done in transaction-like updates known as events. These are different to transactions in the traditional sense, because they are reversible even after they have been committed. This allows you to query the value of things historically, or to count events within a period of time.
 
 ## Example use-case
 
@@ -48,6 +48,9 @@ curl "http://127.0.0.1:1963/example:list/value/example:person/hannah"
 
 # Set the current value of `example:list` for `example:person/hannah`
 curl "http://127.0.0.1:1963/example:list/value/example:person/hannah" --json "[1,2]"
+
+# Get the current value of `example:list` for `example:person/hannah` at <timestamp> (unix seconds)
+curl "http://127.0.0.1:1963/example:list/value/example:person/hannah?at=<timestamp>"
 
 # Append (using a setter, `tardis:list:append`) to a list for `example:person/hannah`
 curl "http://127.0.0.1:1963/example:list/value/example:person/hannah" --json "3"
