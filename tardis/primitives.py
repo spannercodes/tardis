@@ -69,8 +69,8 @@ async def generic_setter(
     db.commit()
 
 def register_primitives(tardis):
-    tardis.register_datatype("tardis:float", float)
-    tardis.register_datatype("tardis:integer", int)
+    tardis.register_datatype("tardis:numeric:float", float)
+    tardis.register_datatype("tardis:numeric:integer", int)
     tardis.register_datatype("tardis:set", set)
     tardis.register_datatype("tardis:list", list)
     tardis.register_datatype("tardis:string", str)
@@ -85,7 +85,7 @@ def register_primitives(tardis):
         starting_value = starting_value_update.body if starting_value_update is not None else default
         return starting_value
 
-    @tardis.getter(["tardis:integer", "tardis:float"], "tardis:numeric:value")
+    @tardis.getter(["tardis:numeric:integer", "tardis:numeric:float"], "tardis:numeric:value")
     async def numeric_value(
         db: Annotated[Session, Depends(tardis.db)],
         field: str, subject_type: str, subject_identifier: str,
@@ -198,7 +198,7 @@ def register_primitives(tardis):
 
         return await generic_setter("tardis:list:append", db, field, subject_type, subject_identifier, request, event)
 
-    @tardis.setter(["tardis:integer", "tardis:float"], "tardis:numeric:delta")
+    @tardis.setter(["tardis:numeric:integer", "tardis:numeric:float"], "tardis:numeric:delta")
     async def numeric_delta(
         db: Annotated[Session, Depends(tardis.db)],
         field: str, subject_type: str, subject_identifier: str,
